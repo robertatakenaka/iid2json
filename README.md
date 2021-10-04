@@ -1,2 +1,2 @@
 # scielo_idb
-Biblioteca para lidar com os dados no formato "ISIS"
+Biblioteca para lidar com as bases de dados SciELO no formato "ISIS"
