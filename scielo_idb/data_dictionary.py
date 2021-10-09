@@ -25,7 +25,7 @@ FROM_TO = (
 )
 
 
-DOC_BUILDER_CSV_FIELD_NAMES = [
+BUILDER_CSV_FIELD_NAMES = [
     'record',
     'tag_number', 'tag_v3', 'tag_vn', 'field_name',
     'subfield', 'subfield_name',
@@ -33,7 +33,7 @@ DOC_BUILDER_CSV_FIELD_NAMES = [
 ]
 
 
-class DocumentModelBuilder:
+class ModelBuilder:
 
     def __init__(self, file_path):
         self._file_path = file_path
@@ -42,7 +42,7 @@ class DocumentModelBuilder:
     def _read(self):
         with open(self._file_path, newline='') as csvfile:
             reader = csv.DictReader(
-                csvfile, delimiter=',', fieldnames=DOC_BUILDER_CSV_FIELD_NAMES)
+                csvfile, delimiter=',', fieldnames=BUILDER_CSV_FIELD_NAMES)
             for row in reader:
                 yield row
 
@@ -67,13 +67,49 @@ class DocumentModelBuilder:
                 )
         self._grouped_by_rec_and_tag = recs
 
-    def get_record_template(self, record_type=None):
+    @property
+    def templates(self):
         if not self._grouped_by_rec_and_tag:
-            self._grouped_by_rec_and_tag()
-        if self._grouped_by_rec_and_tag:
-            if record_type:
-                return self._grouped_by_rec_and_tag.get(record_type)
-            return self._grouped_by_rec_and_tag
+            self._group_by_rec_and_tag()
+        return self._grouped_by_rec_and_tag
+
+    def generate_class_file(self, output_file_path):
+        with open(output_file_path, "w") as fp:
+            fp.write("from scielo_idb.id_records import IdRecords\n\n")
+
+        for rec_type, tags in self.templates.items():
+            class_name = f"RecordType{rec_type.upper()}"
+
+            blocks = [
+                _class_init_builder(class_name),
+            ]
+            for tag in tags.keys():
+                print(tags[tag])
+                blocks.append(
+                    _attribute_builder(tags[tag]['field_name'], tag))
+
+            with open(output_file_path, "a") as fp:
+                fp.write("\n".join(blocks))
+                fp.write("\n"*2)
+
+
+def _class_init_builder(class_name):
+    return "\n".join((
+        f"""""",
+        f"""class {class_name}(IdRecord):""",
+        f"""""",
+        f"""    def __init__(self, record, data_dictionary):""",
+        f"""        super().__init__(record, data_dictionary)""",
+    ))
+
+
+def _attribute_builder(attribute_name, tag):
+    return "\n".join((
+        f"""""",
+        f"""    @property""",
+        f"""    def {attribute_name}(self):""",
+        f"""        return self.get_data('{tag}')""",
+    ))
 
 
 def _apply_standard(word):
@@ -93,7 +129,6 @@ def _get_parent(path):
         if param in path:
             for i, item in enumerate(_path):
                 if param in item or param == item:
-                    print(param, item, _path, path, [_apply_standard(w) for w in _path[i+1:]])
                     return [_apply_standard(w) for w in _path[i+1:]]
     return [_apply_standard(w) for w in _path]
 
@@ -178,7 +213,7 @@ def _generate_csv(artmodel_items, article_2db_items, article_trans):
             artmodel_dict.get(number)
         )
         new_item = {}
-        new_item.update(article_2db_item)
+        new_item["record"] = article_2db_item["record"]
 
         if not items:
 
@@ -238,12 +273,12 @@ def generate_csv(artmodel_items, article_2db_items, article_trans, file_path):
     g = _generate_csv(artmodel_items, article_2db_items, article_trans)
     items = {}
     for item in g:
-        key = (item["record"], item["tag"], item["field_name"])
+        key = (item["record"], item["tag_number"], item["field_name"])
         items.setdefault(key, [])
         items[key].append(item)
 
     with open(file_path, 'w', newline='') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=DOC_BUILDER_CSV_FIELD_NAMES)
+        writer = csv.DictWriter(csvfile, fieldnames=BUILDER_CSV_FIELD_NAMES)
 
         writer.writeheader()
         for key in sorted(items.keys()):
@@ -291,6 +326,27 @@ def main():
         )
     )
 
+    generate_class_parser = subparsers.add_parser(
+        "generate_class",
+        help=(
+            "Generate document model json"
+        )
+    )
+
+    generate_class_parser.add_argument(
+        "document_model_csv_file_path",
+        help=(
+            "document model csv file path"
+        )
+    )
+
+    generate_class_parser.add_argument(
+        "class_file_path",
+        help=(
+            "output file"
+        )
+    )
+
     args = parser.parse_args()
     if args.command == "get_document_model_as_csv":
         article_2db_items = _read_article_2db(args.article_2db_file_path)
@@ -299,13 +355,9 @@ def main():
         generate_csv(
             artmodel_items, article_2db_items, article_trans_dict,
             args.document_model_csv_file_path)
-    elif args.command == "get_document_model":
-        article_2db_items = _read_article_2db(args.article_2db_file_path)
-        artmodel_items = _read_artmodel_txt(args.artmodel_txt_file_path)
-        article_trans_dict = _read_article_trans(args.article_trans_file_path)
-        _generate_json(
-            artmodel_items, article_2db_items, article_trans_dict,
-            args.document_model_json_file_path)
+    elif args.command == "generate_class":
+        model_builder = ModelBuilder(args.document_model_csv_file_path)
+        model_builder.generate_class_file(args.class_file_path)
     else:
         parser.print_help()
 
