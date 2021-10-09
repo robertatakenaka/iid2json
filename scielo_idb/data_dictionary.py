@@ -75,7 +75,7 @@ class ModelBuilder:
 
     def generate_class_file(self, output_file_path):
         with open(output_file_path, "w") as fp:
-            fp.write("from scielo_idb.id_records import IdRecords\n\n")
+            fp.write("from scielo_idb.id_records import IdRecord\n\n")
 
         for rec_type, tags in self.templates.items():
             class_name = f"RecordType{rec_type.upper()}"
@@ -84,7 +84,6 @@ class ModelBuilder:
                 _class_init_builder(class_name),
             ]
             for tag in tags.keys():
-                print(tags[tag])
                 blocks.append(
                     _attribute_builder(tags[tag]['field_name'], tag))
 

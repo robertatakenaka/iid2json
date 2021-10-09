@@ -76,8 +76,7 @@ class IdRecord:
             subf_and_attr = {}
         else:
             subf_and_attr = template["subfields"]
-
-        for occ in self._record.get(tag):
+        for occ in self._record.get(tag) or []:
             item = self.get_occ(occ, subf_and_attr)
             if item:
                 yield item
