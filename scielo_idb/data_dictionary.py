@@ -25,6 +25,52 @@ FROM_TO = (
 )
 
 
+DOC_BUILDER_CSV_FIELD_NAMES = [
+    'record', 'tag', 'field_name', 'subfield', 'subfield_name',
+    'format', 'parent', 'name',
+]
+
+
+class DocumentModelBuilder:
+
+    def __init__(self, file_path):
+        self._file_path = file_path
+        self._grouped_by_rec_and_tag = None
+
+    def _read(self):
+        with open(self._file_path, newline='') as csvfile:
+            reader = csv.DictReader(
+                csvfile, delimiter=',', fieldnames=DOC_BUILDER_CSV_FIELD_NAMES)
+            for row in reader:
+                yield row
+
+    def _group_by_rec_and_tag(self):
+        recs = {}
+        for row in self._read():
+            rec_type = row["record"]
+            tag = row["tag"]
+            recs[rec_type] = recs.get(rec_type) or {}
+            recs[rec_type][tag] = recs[rec_type].get(tag) or {}
+            if not recs[rec_type][tag]:
+                recs[rec_type][tag]["field_name"] = row["field_name"]
+                recs[rec_type][tag]["format"] = row["format"]
+                recs[rec_type][tag]["subfields"] = {}
+
+            if row["subfield"]:
+                recs[rec_type][tag]["subfields"].update(
+                    {row["subfield"]: row["subfield_name"]}
+                )
+        self._grouped_by_rec_and_tag = recs
+
+    def get_record_template(self, record_type=None):
+        if not self._grouped_by_rec_and_tag:
+            self._grouped_by_rec_and_tag()
+        if self._grouped_by_rec_and_tag:
+            if record_type:
+                return self._grouped_by_rec_and_tag.get(record_type)
+            return self._grouped_by_rec_and_tag
+
+
 def _apply_standard(word):
     for f, t in FROM_TO:
         if f in word:
@@ -180,11 +226,6 @@ def generate_csv(artmodel_items, article_2db_items, article_trans, file_path):
     if dirname and not os.path.isdir(dirname):
         os.makedirs(dirname)
 
-    fieldnames = [
-        'record', 'tag', 'field_name', 'subfield', 'subfield_name',
-        'format', 'parent', 'name',
-    ]
-
     g = _generate_csv(artmodel_items, article_2db_items, article_trans)
     items = {}
     for item in g:
@@ -193,7 +234,7 @@ def generate_csv(artmodel_items, article_2db_items, article_trans, file_path):
         items[key].append(item)
 
     with open(file_path, 'w', newline='') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer = csv.DictWriter(csvfile, fieldnames=DOC_BUILDER_CSV_FIELD_NAMES)
 
         writer.writeheader()
         for key in sorted(items.keys()):
