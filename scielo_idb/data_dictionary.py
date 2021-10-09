@@ -26,7 +26,9 @@ FROM_TO = (
 
 
 DOC_BUILDER_CSV_FIELD_NAMES = [
-    'record', 'tag', 'field_name', 'subfield', 'subfield_name',
+    'record',
+    'tag_number', 'tag_v3', 'tag_vn', 'field_name',
+    'subfield', 'subfield_name',
     'format', 'parent', 'name',
 ]
 
@@ -48,12 +50,15 @@ class DocumentModelBuilder:
         recs = {}
         for row in self._read():
             rec_type = row["record"]
-            tag = row["tag"]
+            tag = row["tag_v3"]
             recs[rec_type] = recs.get(rec_type) or {}
             recs[rec_type][tag] = recs[rec_type].get(tag) or {}
             if not recs[rec_type][tag]:
-                recs[rec_type][tag]["field_name"] = row["field_name"]
-                recs[rec_type][tag]["format"] = row["format"]
+                recs[rec_type][tag] = {
+                    l: row[l]
+                    for l in ["tag_number", "tag_v3", "tag_vn",
+                              "field_name", "format"]
+                }
                 recs[rec_type][tag]["subfields"] = {}
 
             if row["subfield"]:
@@ -178,7 +183,9 @@ def _generate_csv(artmodel_items, article_2db_items, article_trans):
         if not items:
 
             _names = [article_2db_item['parent'], article_2db_item['name']]
-            new_item["tag"] = f"{number}"
+            new_item["tag_number"] = f"{number}"
+            new_item["tag_v3"] = f"v{number.zfill(3)}"
+            new_item["tag_vn"] = f"v{number}"
             new_item["field_name"] = _get_attribute_name(_names)
             new_item["subfield"] = ""
             new_item["subfield_name"] = ""
@@ -211,7 +218,9 @@ def _generate_csv(artmodel_items, article_2db_items, article_trans):
             _names = [article_2db_item['parent']]
             if not item.get("subfield"):
                 _names.append(article_2db_item['name'])
-            new_item["tag"] = f"{tag}"
+            new_item["tag_number"] = f"{tag}"
+            new_item["tag_v3"] = f"v{tag.zfill(3)}"
+            new_item["tag_vn"] = f"v{tag}"
             new_item["field_name"] = _get_attribute_name(_names)
             new_item["subfield"] = item.get("subfield") or "_"
             new_item["subfield_name"] = _get_attribute_name([item_name])
