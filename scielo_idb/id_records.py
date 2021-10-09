@@ -20,37 +20,41 @@ def _get_items(data, tag):
         return None
 
 
+class Record:
+
+    def __init__(self, rec_type):
+        self._rec_type = rec_type
+
+    @property
+    def rec_type(self):
+        return self._rec_type
+
+
 class IdRecord:
 
     def __init__(self, record, data_dictionary):
         self._record = record
         self._data_dict = data_dictionary
-        self._alt_get_tag = self._get_tag_function
+        if self.rec_type:
+            try:
+                self._data_dict = data_dictionary[self.rec_type]
+            except KeyError:
+                self._data_dict = data_dictionary
 
     @property
-    def _get_data_function(self):
-        first = min(self._record.keys(), key=lambda x: len(x))
-        if len(first) < 4:
-            return self._get_data
-        else:
-            return self._get_data_3
+    def rec_type(self):
+        try:
+            return self._record.get("v706")[0]["_"]
+        except:
+            return
 
-    def get_tag_content(self, tag):
-        return self._record.get(tag) or self._alt_get_tag_content(tag)
-
-    def _get_tag_content(self, tag):
-        return self._record.get("v" + str(int(tag[1:])))
-
-    def _get_tag_content_3(self, tag):
-        return self._record.get("v" + tag[1:].zfill(3))
-
-    def get_data(self, tag, subf_and_attr=None):
+    def get_data(self, tag):
         """
         Retorna os dados do campo `tag` em formato `dict`
 
         Exemplo:
-        tag: "v10"
-        name: "authors"
+        tag: "v010"
+
         subf_and_attr:
         {
             "s": "surname",
@@ -66,7 +70,14 @@ class IdRecord:
         ]
         ```
         """
-        for occ in self.get_tag_content(tag):
+        try:
+            template = self._data_dict[tag]
+        except KeyError:
+            subf_and_attr = {}
+        else:
+            subf_and_attr = template["subfields"]
+
+        for occ in self._record.get(tag):
             item = self.get_occ(occ, subf_and_attr)
             if item:
                 yield item
@@ -90,11 +101,12 @@ class IdRecord:
         record = {}
         for tag in self._record.keys():
             try:
-                name, subf_and_attr = self._data_dict[tag]
+                template = self._data_dict[tag]
             except KeyError:
-                name = tag
-                subf_and_attr = {}
-            record[name] = self.get_data(tag, subf_and_attr)
+                field_name = tag
+            else:
+                field_name = template["tag_v3"]
+            record[field_name] = self.get_data(tag)
         return record
 
     def build_dict(self, data_dict):
@@ -102,9 +114,10 @@ class IdRecord:
         Cria atributos no obj baseado em `data_dict`
         """
         record = {}
-        for tag, field_info in data_dict.items():
-            name, subf_and_attr = field_info
-            record[name] = self.get_data(tag, subf_and_attr)
+        for tag, template in data_dict.items():
+            field_name = template["field_name"]
+            subf_and_attr = template["subfields"]
+            record[field_name] = self.get_data(tag, subf_and_attr)
         return record
 
     def get_record_as_object(self, obj):
