@@ -1,5 +1,4 @@
 import os
-import argparse
 import csv
 import json
 
@@ -202,5 +201,3 @@ def generate_csv(article_2db_file_path, artmodel_txt_file_path,
         for key in sorted(items.keys()):
             for item in items[key]:
                 writer.writerow(item)
-
-
